@@ -14,7 +14,7 @@ const (
 )
 
 const crlf = "\r\n"
-const bufferSize = 8
+const bufferSize = 1024
 
 type Request struct {
 	RequestLine RequestLine

@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/jonvanw/httpfromtcp/internal/request"
 )
 
 func main() {
@@ -26,44 +26,15 @@ func main() {
 			log.Printf("Failed to accept connection: %s", err.Error())
 			continue
 		}
-		fmt.Println("a message has been accepted.")
-		lines := getLinesChannel(conn)
-		for line := range lines {
-			fmt.Printf("%s\n", line)
+		request, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Printf("Failed to parse request: %s", err.Error())
+			continue
 		}
-		fmt.Println("end of message")
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %+v\n", request.RequestLine.Method)
+		fmt.Printf("- Target: %+v\n", request.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %+v\n", request.RequestLine.HttpVersion)
+		conn.Close()
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	ch := make(chan string)
-
-	go func() {
-		defer f.Close()
-		defer close(ch)
-		buf := make([]byte, 8)
-		linesChan := []string{}
-		for {
-			n, err := f.Read(buf)
-			if err != nil {
-				if err == io.EOF {
-					ch <- strings.Join(linesChan, "")
-					break
-				}
-				log.Printf("Unexpected error reading file: %s", err.Error())
-				break
-			}
-
-			parts := strings.Split(string(buf[:n]), "\n")
-				for i := 0; i < len(parts); i++ {
-					if i > 0 {
-						ch <- strings.Join(linesChan, "")
-						linesChan = []string{}
-					}
-					linesChan = append(linesChan, parts[i])
-				}
-		}
-	}()
-
-	return ch
 }
