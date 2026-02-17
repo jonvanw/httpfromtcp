@@ -91,6 +91,64 @@ func TestBadRequestUnsupportedVersion(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRequestWithHeaders(t *testing.T) {
+	// Test: Standard Headers
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069", r.Headers["host"])
+	assert.Equal(t, "curl/7.81.0", r.Headers["user-agent"])
+	assert.Equal(t, "*/*", r.Headers["accept"])
+}
+
+func TestREquestWithoutHeadrs(t *testing.T) {
+	// Test: No headers
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Empty(t, r.Headers)	
+}
+
+func TestDuplicateHeaders(t *testing.T) {
+	// Test: Duplicate headers should be combined with a comma and space separating values
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nHost: example.com\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "localhost:42069, example.com", r.Headers["host"])	
+}
+
+func TestBadRequestInvalidHeader(t *testing.T) {
+	// Test: Malformed Header name
+	reader := &chunkReader{
+		data:            "GET / HTTP/1.1\r\nHost localhost:42069\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	_, err := RequestFromReader(reader)
+	require.Error(t, err)
+}
+
+// func TestMissingEndOfHeaders(t *testing.T) {
+// 	// Test: Missing end of headers (CRLF CRLF)
+// 	reader := &chunkReader{
+// 		data:            "GET / HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n",
+// 		numBytesPerRead: 3,
+// 	}
+// 	_, err := RequestFromReader(reader)
+// 	require.Error(t, err)
+// }
+
 type chunkReader struct {
 	data            string
 	numBytesPerRead int
