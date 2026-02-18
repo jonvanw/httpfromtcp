@@ -9,6 +9,11 @@ import (
 
 type Headers map[string]string
 
+func (h Headers) Get(key string) (string, bool) {
+	value, ok := h[strings.ToLower(key)]
+	return value, ok
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	text := string(data)
 	lineEndIndex := strings.Index(text, internal.CRLF)

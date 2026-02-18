@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/jonvanw/httpfromtcp/internal"
@@ -15,12 +16,14 @@ type requestState int
 const (
 	requestStateInitialized requestState = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body 	    []byte
 	state       requestState
 }
 
@@ -53,7 +56,23 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 		data = data[bytes:]
 	}
-	
+
+	// Check if the reader still has unread data (body longer than Content-Length)
+	// Note the body is ignored if Content-Length is not provided, so we only check for extra data if Content-Length is present
+	if _, ok := request.Headers.Get("Content-Length"); ok {
+		if len(data) > 0 {
+			return nil, fmt.Errorf("body is longer than reported content length")
+		}
+		extra := make([]byte, 1)
+		n, err := reader.Read(extra)
+		if n > 0 {
+			return nil, fmt.Errorf("body is longer than reported content length")
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("failed to read from reader: %w", err)
+		}
+	}
+
 	return request, nil
 }
 
@@ -96,9 +115,32 @@ func (r *Request) parseSingleItem(data []byte) (int, error) {
 			return 0, err
 		}
 		if isDone {
-			r.state = requestStateDone
+			r.state = requestStateParsingBody
 		}
 		return bytes, nil
+	case requestStateParsingBody:
+		contentLengthStr, ok := r.Headers.Get("Content-Length")
+		if !ok {
+			r.state = requestStateDone
+			return 0, nil
+		}
+		contentLength, err := strconv.Atoi(contentLengthStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid Content-Length header: %w", err)
+		}
+		if contentLength == 0 {
+			r.state = requestStateDone
+			return 0, nil
+		}
+		if len(data) < contentLength {
+			return 0, nil
+		}
+		if len(data) > contentLength {
+			return 0, fmt.Errorf("body is longer than reported content length")
+		}
+		r.Body = data[:contentLength]
+		r.state = requestStateDone
+		return contentLength, nil
 	case requestStateDone:
 		return 0, fmt.Errorf("error: attempting to parser request after it is already done")
 	default:
