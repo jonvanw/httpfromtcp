@@ -14,6 +14,7 @@ const (
 	WriterInitialized = iota
 	WroteStatusLine
 	WroterHeaders
+	WritingBody
 	WroteBody
 )
 
@@ -60,6 +61,41 @@ func (w *Writer) WriteBody(p []byte) (n int, err error) {
 		return 0, fmt.Errorf("cannot write body before writing headers, current status: %d", w.status)
 	}
 	n, err = w.IOWriter.Write(p)
+	if err != nil {
+		w.status = WriterError
+		return n, err
+	}
+	w.status = WroteBody
+	return n, err
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.status != WroterHeaders && w.status != WritingBody {
+		return 0, fmt.Errorf("can only call WriteChunkedBody() after calling WriteHeaders() or WriteChunkedBody(), current status: %d", w.status)
+	}
+	total := 0
+	n, err := w.IOWriter.Write([]byte(fmt.Sprintf("%x\r\n", len(p))))
+	if err != nil {
+		w.status = WriterError
+		return n, err
+	}
+	total += n
+	n, err = w.IOWriter.Write(p)
+	if err != nil {
+		w.status = WriterError
+		return n, err
+	}
+	total += n
+	w.IOWriter.Write([]byte("\r\n"))
+	w.status = WritingBody
+	return total, err
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.status != WroterHeaders && w.status != WritingBody {
+		return 0, fmt.Errorf("can only call WriteChunkedBodyDone() after calling WriteChunkedBody() (or after WriteHeaders() for empty chunked body), current status: %d", w.status)
+	}
+	n, err := w.IOWriter.Write([]byte("0\r\n\r\n"))
 	if err != nil {
 		w.status = WriterError
 		return n, err

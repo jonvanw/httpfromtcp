@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/jonvanw/httpfromtcp/internal/request"
@@ -42,22 +45,62 @@ func handler(w *response.Writer, req *request.Request) {
 		statusCode = response.StatusOK
 		body = OK_RESPONSE_BODY
 	}
+
 	err := w.WriteStatusLine(statusCode)
 	if err != nil {
 		log.Printf("Error writing status line: %v", err)
 		return
 	}
+	
 	headers := response.GetDefaultHeaders(len(body))
+	httpBinPrefix := "/httpbin/"
+	isChunked := strings.HasPrefix(req.RequestLine.RequestTarget, httpBinPrefix)
+	if isChunked {
+		headers.Remove("content-length")
+		headers.Append("transfer-encoding", "chunked")
+	} 
 	err = w.WriteHeaders(headers)
 	if err != nil {
 		log.Printf("Error writing headers: %v", err)
 		return
 	}
-	_, err = w.WriteBody([]byte(body))
-	if err != nil {
-		log.Printf("Error writing body: %v", err)
+
+	if !isChunked {
+		_, err = w.WriteBody([]byte(body))
+		if err != nil {
+			log.Printf("Error writing body: %v", err)
+			return
+		}
 		return
 	}
+
+	x := strings.TrimPrefix(req.RequestLine.RequestTarget, httpBinPrefix)
+	httpBinUrl := fmt.Sprintf("https://httpbin.org/%s", x)
+	resp, err := http.Get(httpBinUrl)
+	if err != nil {
+		log.Printf("Error making request to httpbin: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 1024)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			_, err = w.WriteChunkedBody(buf[:n])
+			if err != nil {
+				log.Printf("Error writing chunked body: %v", err)
+				return
+			}
+		}
+		if err != nil {
+			if err.Error() != "EOF" {
+				log.Printf("Error reading response body: %v", err)
+			}
+			break
+		}
+	}
+	w.WriteChunkedBodyDone()
+	return
 }
 
 const BAD_REQUEST_RESPONSE_BODY = `<html>

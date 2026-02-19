@@ -14,6 +14,22 @@ func (h Headers) Get(key string) (string, bool) {
 	return value, ok
 }
 
+func (h Headers) Append(key, value string) {
+	originalValue, ok := h[strings.ToLower(key)]
+	if ok {
+		h[strings.ToLower(key)] = originalValue + ", " + value
+	} else {
+		h[strings.ToLower(key)] = value
+	}
+}
+
+func (h Headers) Remove(key string) { 
+	if _, ok := h[strings.ToLower(key)]; !ok {
+		return
+	}
+	delete(h, strings.ToLower(key))
+}
+
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	text := string(data)
 	lineEndIndex := strings.Index(text, internal.CRLF)
