@@ -52,7 +52,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
 	return headers.Headers{
-		"content-type": "text/plain",
+		"Content-Type": "text/html",
 		"content-length": fmt.Sprintf("%d", contentLen),
 		"connection": "close",
 	}
