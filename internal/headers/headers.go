@@ -94,6 +94,7 @@ func isValidKey(k string) bool {
 	}
 	return true
 }
+
 func NewHeaders() Headers {
 	return Headers{}
 }

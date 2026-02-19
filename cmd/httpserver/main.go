@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,12 +10,14 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/jonvanw/httpfromtcp/internal/headers"
 	"github.com/jonvanw/httpfromtcp/internal/request"
 	"github.com/jonvanw/httpfromtcp/internal/response"
 	"github.com/jonvanw/httpfromtcp/internal/server"
 )
 
 const port = 42069
+const bufferSize = 1024
 
 func main() {
 	server, err := server.Serve(port, handler)
@@ -52,14 +55,15 @@ func handler(w *response.Writer, req *request.Request) {
 		return
 	}
 	
-	headers := response.GetDefaultHeaders(len(body))
+	resHeaders := response.GetDefaultHeaders(len(body))
 	httpBinPrefix := "/httpbin/"
 	isChunked := strings.HasPrefix(req.RequestLine.RequestTarget, httpBinPrefix)
 	if isChunked {
-		headers.Remove("content-length")
-		headers.Append("transfer-encoding", "chunked")
+		resHeaders.Remove("content-length")
+		resHeaders.Append("transfer-encoding", "chunked")
+		resHeaders.Append("trailer", "X-Content-SHA256, X-Content-Length")
 	} 
-	err = w.WriteHeaders(headers)
+	err = w.WriteHeaders(resHeaders)
 	if err != nil {
 		log.Printf("Error writing headers: %v", err)
 		return
@@ -82,10 +86,12 @@ func handler(w *response.Writer, req *request.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	buf := make([]byte, 1024)
+	buf := make([]byte, bufferSize)
+	fullBody := []byte{}
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
+			fullBody = append(fullBody, buf[:n]...)
 			_, err = w.WriteChunkedBody(buf[:n])
 			if err != nil {
 				log.Printf("Error writing chunked body: %v", err)
@@ -100,7 +106,15 @@ func handler(w *response.Writer, req *request.Request) {
 		}
 	}
 	w.WriteChunkedBodyDone()
-	return
+	trailers := headers.NewHeaders()
+	sh := sha256.Sum256(fullBody)
+	trailers.Append("X-Content-SHA256", fmt.Sprintf("%x", sh))
+	trailers.Append("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+	err = w.WriteTrailers(trailers)
+	if err != nil {
+		log.Printf("Error writing trailers: %v", err)
+		return
+	}
 }
 
 const BAD_REQUEST_RESPONSE_BODY = `<html>

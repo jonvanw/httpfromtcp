@@ -16,6 +16,7 @@ const (
 	WroterHeaders
 	WritingBody
 	WroteBody
+	WroteTrailers
 )
 
 type Writer struct {
@@ -102,4 +103,17 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 	}
 	w.status = WroteBody
 	return n, err
+}
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	if w.status != WroteBody {
+		return fmt.Errorf("can only call WriteTrailers() after body was written, current status: %d", w.status)
+	}
+	err := WriteHeaders(w.IOWriter, h)
+	if err != nil {
+		w.status = WriterError
+		return fmt.Errorf("error writing trailers: %v", err)
+	}
+	w.status = WroteTrailers
+	return nil
 }
