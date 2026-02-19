@@ -15,6 +15,7 @@ import (
 
 type Server struct {
 	Port 	 int
+	handler  Handler
 	listener net.Listener
 	closed   atomic.Bool
 }
@@ -26,8 +27,12 @@ func Serve(port int, handler Handler) (*Server, error) {
 		return nil, err
 	}
 
-	s := &Server{Port: port, listener: listener}
-	go s.listen(handler)
+	s := &Server{
+		Port: port, 
+		handler: handler,
+		listener: listener,
+	}
+	go s.listen()
 	
 	return s, nil
 }
@@ -38,7 +43,7 @@ func (s *Server) Close() error {
 	return s.listener.Close()
 }
 
-func (s *Server) listen(handler Handler) { 
+func (s *Server) listen() { 
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -50,11 +55,11 @@ func (s *Server) listen(handler Handler) {
 			continue
 		}
 
-		go s.handle(conn, handler)
+		go s.handle(conn)
 	}
 }
 
-func (s *Server) handle(conn net.Conn, handler Handler) { 
+func (s *Server) handle(conn net.Conn) { 
 	defer conn.Close()
 	bw := bufio.NewWriter(conn)
 	defer bw.Flush()
@@ -70,7 +75,7 @@ func (s *Server) handle(conn net.Conn, handler Handler) {
 		return
 	}
 	
-	handlerError := handler(&buf, req)
+	handlerError := s.handler(&buf, req)
 	if handlerError != nil {
 		log.Printf("Handler error: %s", handlerError.Message)
 		err = response.WriteStatusLine(bw, response.StatusCode(handlerError.StatusCode))
