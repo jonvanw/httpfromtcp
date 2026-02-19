@@ -96,7 +96,7 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 	if w.status != WroterHeaders && w.status != WritingBody {
 		return 0, fmt.Errorf("can only call WriteChunkedBodyDone() after calling WriteChunkedBody() (or after WriteHeaders() for empty chunked body), current status: %d", w.status)
 	}
-	n, err := w.IOWriter.Write([]byte("0\r\n\r\n"))
+	n, err := w.IOWriter.Write([]byte("0\r\n"))
 	if err != nil {
 		w.status = WriterError
 		return n, err

@@ -18,8 +18,10 @@ func (h Headers) Append(key, value string) {
 	originalValue, ok := h[strings.ToLower(key)]
 	if ok {
 		h[strings.ToLower(key)] = originalValue + ", " + value
+		//h[key] = originalValue + ", " + value
 	} else {
 		h[strings.ToLower(key)] = value
+		//h[key] = value
 	}
 }
 
