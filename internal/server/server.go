@@ -8,7 +8,6 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/jonvanw/httpfromtcp/internal"
 	"github.com/jonvanw/httpfromtcp/internal/request"
 	"github.com/jonvanw/httpfromtcp/internal/response"
 )
@@ -68,30 +67,18 @@ func (s *Server) handle(conn net.Conn) {
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
 		log.Printf("Error parsing request: %v", err)
-		err = response.WriteStatusLine(bw, response.StatusBadRequest)
-		if err != nil {
-			log.Printf("Error sending error response: %v", err)
+		hErr := &HandlerError{
+			StatusCode: response.StatusBadRequest,
+			Message: err.Error(),
 		}
+		hErr.Write(bw)
 		return
 	}
 	
 	handlerError := s.handler(&buf, req)
 	if handlerError != nil {
 		log.Printf("Handler error: %s", handlerError.Message)
-		err = response.WriteStatusLine(bw, response.StatusCode(handlerError.StatusCode))
-		if err != nil {
-			log.Printf("Error sending error response: %v", err)
-			return
-		}
-		_, err = bw.WriteString(internal.CRLF)
-		if err != nil {
-			log.Printf("Error writing error response body: %v", err)
-			return
-		}
-		_, err = bw.WriteString(handlerError.Message)
-		if err != nil {
-			log.Printf("Error writing error response body: %v", err)
-		}
+		handlerError.Write(bw)
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/jonvanw/httpfromtcp/internal/request"
+	"github.com/jonvanw/httpfromtcp/internal/response"
 	"github.com/jonvanw/httpfromtcp/internal/server"
 )
 
@@ -32,12 +33,12 @@ func handler(w io.Writer, req *request.Request) *server.HandlerError {
 	switch req.RequestLine.RequestTarget {
 	case "/yourproblem":
 		return &server.HandlerError{
-			StatusCode: 400,
+			StatusCode: response.StatusBadRequest,
 			Message: "Your problem is not my problem\n",
 		}
 	case "/myproblem":
 		return &server.HandlerError{
-			StatusCode: 500,
+			StatusCode: response.StatusInternalServerError,
 			Message: "Woopsie, my bad\n",
 		}
 	}
@@ -45,7 +46,7 @@ func handler(w io.Writer, req *request.Request) *server.HandlerError {
 	_, err := io.WriteString(w, "All good, frfr\n")
 	if err != nil {
 		return &server.HandlerError{
-			StatusCode: 500,
+			StatusCode: response.StatusInternalServerError,
 			Message: "Error writing response: " + err.Error(),
 		}
 	}
