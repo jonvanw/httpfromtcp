@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/jonvanw/httpfromtcp/internal"
 	"github.com/jonvanw/httpfromtcp/internal/headers"
 )
 
@@ -42,7 +43,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 		}
 	}
 	// Write the blank line to indicate the end of headers
-	_, err := io.WriteString(w, "\r\n")
+	_, err := io.WriteString(w, internal.CRLF)
 	if err != nil {
 		return fmt.Errorf("error closing headers: %v", err)
 	}
