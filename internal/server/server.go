@@ -1,10 +1,13 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
 	"sync/atomic"
+
+	"github.com/jonvanw/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -50,7 +53,18 @@ func (s *Server) listen()  {
 
 func (s *Server) handle(conn net.Conn) { 
 	defer conn.Close()
-	response := "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\nHello World!"
-	conn.Write([]byte(response))
+	bw := bufio.NewWriter(conn)
+	defer bw.Flush()
 	
+	err := response.WriteStatusLine(bw, response.StatusOK)
+	if err != nil {
+		log.Printf("Error writing status line: %v", err)
+		return
+	}
+	headers := response.GetDefaultHeaders(0)
+	err = response.WriteHeaders(bw, headers)
+	if err != nil {
+		log.Printf("Error writing headers: %v", err)
+		return
+	} 
 }
