@@ -35,50 +35,65 @@ func main() {
 }
 
 func handler(w *response.Writer, req *request.Request) {
-	var statusCode response.StatusCode
-	var body string
-	switch req.RequestLine.RequestTarget {
-	case "/yourproblem":
-		statusCode = response.StatusBadRequest
-		body = BAD_REQUEST_RESPONSE_BODY
-	case "/myproblem":
-		statusCode = response.StatusInternalServerError
-		body = INTERNAL_SERVER_ERROR_RESPONSE_BODY
+	target := req.RequestLine.RequestTarget
+	switch {
+	case target == "/yourproblem":
+		handleYourProblem(w)
+	case target == "/myproblem":
+		handleMyProblem(w)
+	case strings.HasPrefix(target, "/httpbin/"):
+		handleHttpBin(w, target)
 	default:
-		statusCode = response.StatusOK
-		body = OK_RESPONSE_BODY
+		handleOK(w)
 	}
+}
 
+func handleYourProblem(w *response.Writer) {
+	writeSimpleResponse(w, response.StatusBadRequest, BAD_REQUEST_RESPONSE_BODY)
+}
+
+func handleMyProblem(w *response.Writer) {
+	writeSimpleResponse(w, response.StatusInternalServerError, INTERNAL_SERVER_ERROR_RESPONSE_BODY)
+}
+
+func handleOK(w *response.Writer) {
+	writeSimpleResponse(w, response.StatusOK, OK_RESPONSE_BODY)
+}
+
+func writeSimpleResponse(w *response.Writer, statusCode response.StatusCode, body string) {
 	err := w.WriteStatusLine(statusCode)
 	if err != nil {
 		log.Printf("Error writing status line: %v", err)
 		return
 	}
-	
-	resHeaders := response.GetDefaultHeaders(len(body))
-	httpBinPrefix := "/httpbin/"
-	isChunked := strings.HasPrefix(req.RequestLine.RequestTarget, httpBinPrefix)
-	if isChunked {
-		resHeaders.Remove("content-length")
-		resHeaders.Append("transfer-encoding", "chunked")
-		resHeaders.Append("trailer", "X-Content-SHA256, X-Content-Length")
-	} 
+	err = w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+	if err != nil {
+		log.Printf("Error writing headers: %v", err)
+		return
+	}
+	_, err = w.WriteBody([]byte(body))
+	if err != nil {
+		log.Printf("Error writing body: %v", err)
+	}
+}
+
+func handleHttpBin(w *response.Writer, target string) {
+	err := w.WriteStatusLine(response.StatusOK)
+	if err != nil {
+		log.Printf("Error writing status line: %v", err)
+		return
+	}
+	resHeaders := response.GetDefaultHeaders(0)
+	resHeaders.Remove("content-length")
+	resHeaders.Append("transfer-encoding", "chunked")
+	resHeaders.Append("trailer", "X-Content-SHA256, X-Content-Length")
 	err = w.WriteHeaders(resHeaders)
 	if err != nil {
 		log.Printf("Error writing headers: %v", err)
 		return
 	}
 
-	if !isChunked {
-		_, err = w.WriteBody([]byte(body))
-		if err != nil {
-			log.Printf("Error writing body: %v", err)
-			return
-		}
-		return
-	}
-
-	x := strings.TrimPrefix(req.RequestLine.RequestTarget, httpBinPrefix)
+	x := strings.TrimPrefix(target, "/httpbin/")
 	httpBinUrl := fmt.Sprintf("https://httpbin.org/%s", x)
 	resp, err := http.Get(httpBinUrl)
 	if err != nil {
@@ -113,7 +128,6 @@ func handler(w *response.Writer, req *request.Request) {
 	err = w.WriteTrailers(trailers)
 	if err != nil {
 		log.Printf("Error writing trailers: %v", err)
-		return
 	}
 }
 
