@@ -23,6 +23,10 @@ func (h Headers) Append(key, value string) {
 	}
 }
 
+func (h Headers) Override(key, value string) {
+	h[strings.ToLower(key)] = value
+}
+
 func (h Headers) Remove(key string) { 
 	if _, ok := h[strings.ToLower(key)]; !ok {
 		return

@@ -41,6 +41,8 @@ func handler(w *response.Writer, req *request.Request) {
 		handleYourProblem(w)
 	case target == "/myproblem":
 		handleMyProblem(w)
+	case target == "/video":
+		handleVideo(w)
 	case strings.HasPrefix(target, "/httpbin/"):
 		handleHttpBin(w, target)
 	default:
@@ -67,6 +69,33 @@ func writeSimpleResponse(w *response.Writer, statusCode response.StatusCode, bod
 		return
 	}
 	err = w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+	if err != nil {
+		log.Printf("Error writing headers: %v", err)
+		return
+	}
+	_, err = w.WriteBody([]byte(body))
+	if err != nil {
+		log.Printf("Error writing body: %v", err)
+	}
+}
+
+func handleVideo(w *response.Writer) {
+	body, err := os.ReadFile("assets/vim.mp4")
+	if err != nil {
+		log.Printf("Error reading video file: %v", err)
+		writeSimpleResponse(w, response.StatusInternalServerError, INTERNAL_SERVER_ERROR_RESPONSE_BODY)
+		return
+	}
+	
+	err = w.WriteStatusLine(response.StatusOK)
+	if err != nil {
+		log.Printf("Error writing status line: %v", err)
+		return
+	}
+
+	headers := response.GetDefaultHeaders(len(body))
+	headers.Override("content-type", "video/mp4")
+	err = w.WriteHeaders(headers)
 	if err != nil {
 		log.Printf("Error writing headers: %v", err)
 		return
